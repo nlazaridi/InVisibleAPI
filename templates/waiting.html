@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Waiting</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        // Function to periodically check the inference status
+        function checkStatus(filename) {
+            $.ajax({
+                url: "/check_status/" + filename,
+                success: function (response) {
+                    if (response.classification) {
+                        window.location.href = "/result/" + filename + "?classification=" + response.classification;
+                    } else {
+                        setTimeout(function () {
+                            checkStatus(filename);
+                        }, 1000);  // Check status every 1 second
+                    }
+                },
+                error: function (error) {
+                    console.log(error);
+                }
+            });
+        }
+
+        // Entry point
+        $(document).ready(function () {
+            var filename = "{{ filename }}";
+            checkStatus(filename);
+        });
+    </script>
+</head>
+<body>
+    <h1>Waiting for Inference...</h1>
+    <p>Please wait while the image is being processed.</p>
+</body>
+</html>
