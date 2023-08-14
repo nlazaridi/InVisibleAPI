@@ -21,4 +21,4 @@ To use this code, first activate the Conda environment as described above. Then,
 ```console
 python main.py
 ```
-Open http://127.0.0.1:5000 on your browser
+Open http://127.0.0.1:5000 on your browser and upload your photos
