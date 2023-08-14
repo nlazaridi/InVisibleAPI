@@ -1,3 +1,4 @@
+# Import necessary modules and libraries
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_from_directory
 from werkzeug.utils import secure_filename
 import torchvision.models as models
@@ -12,17 +13,19 @@ from llama_cpp import Llama
 import os
 import time
 
+# Create a Flask web application instance
 app = Flask(__name__)
 app.config['UPLOADED_PHOTOS_DEST'] = 'uploads'
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 app.use_static_for_external = True
 features_blobs = []
+
 # Helper function to check if the file extension is allowed
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
-# Welcome page with image upload form
+# Route for the main page, handles image upload
 @app.route('/', methods=['GET', 'POST'])
 def upload_file():
     if request.method == 'POST':
@@ -37,11 +40,12 @@ def upload_file():
             return redirect(url_for('waiting_page', filename=filename))
     return render_template('welcome.html')
 
-# Waiting page
+# Page to display while waiting for inference
 @app.route('/waiting/<filename>')
 def waiting_page(filename):
     return render_template('waiting.html', filename=filename)
 
+# Route to serve uploaded files
 @app.route('/uploads/<filename>')
 def get_file(filename):
     return send_from_directory(app.config['UPLOADED_PHOTOS_DEST'], filename)
@@ -49,9 +53,6 @@ def get_file(filename):
 # API endpoint to check the inference status
 @app.route('/check_status/<filename>')
 def check_status(filename):
-    # Simulate inference time
-    time.sleep(5)
-
     # Perform classification on the uploaded image here
     # load the labels
     image_path = os.path.join(app.config['UPLOADED_PHOTOS_DEST'], filename)
@@ -79,15 +80,14 @@ def check_status(filename):
     probs = probs.numpy()
     idx = idx.numpy()
 
-    # output the IO prediction
+    # Output the indoor/outdoor prediction
     io_image = np.mean(labels_IO[idx[:10]]) # vote for the indoor or outdoor
     if io_image < 0.5:
         type_of_env = 'indoor'
-    #    print('--TYPE OF ENVIRONMENT: indoor')
     else:
         type_of_env = 'outdoor'
-    #    print('--TYPE OF ENVIRONMENT: outdoor')
 
+    # Determine scene categories
     new_classes = ['altar', 'apse', 'bell_tower', 'column', 'dome(inner)', 'dome(outer)', 'flying_buttress', 'gargoyle', 'stained_glass', 'vault']
     scene_cat = [classes[idx[0]]]
     if classes[idx[0]] in new_classes:
@@ -114,11 +114,13 @@ def check_status(filename):
         else:  
             attributes_list.append(labels_attribute[idx_a[i]])
 
-    
+    # Generate output based on the scene   
     if len(scene_cat)==1:
         input_text = '### Instruction: Describe without adding too much random information an ' + type_of_env + ' image of a ' + scene_cat[0] +'. The lighting conditions are ' + lighting_cond + '. Some more relevant words that you can use are: ' + attributes_list[0] +', ' + attributes_list[1] + '. \n### Response:'
     else:
         input_text = '### Instruction: Describe without adding too much random information an ' + type_of_env + ' image of a ' + scene_cat[0] + ' and a '+ scene_cat[1] +'. The lighting conditions are ' + lighting_cond + '. Some more relevant words that you can use are: ' + attributes_list[0] +', ' + attributes_list[1] + '. \n### Response:'
+    
+    # Initialize the Stable Vicuna model
     llm = Llama(model_path='/data2/nlazaridis/places_finetunning/models/stable-vicuna-13B.ggmlv3.q4_K_S.bin')
     output = llm(input_text,
                 max_tokens=200,
@@ -127,6 +129,7 @@ def check_status(filename):
                 echo=True)
     print(output['choices'][0]['text'])
 
+    # Extract the response from the Llama output
     response_index = output['choices'][0]['text'].find("### Response:")
     if response_index != -1:
         text_message = output['choices'][0]['text'][response_index + len("### Response:"):]
@@ -136,8 +139,7 @@ def check_status(filename):
 
     file_url = url_for('get_file', filename=filename)
 
-    # Replace the following code with your actual classification model logic
-    #classification_output = "Example classification output"
+
     classification_output = text_message
     return jsonify({'classification': classification_output}), 200
 
